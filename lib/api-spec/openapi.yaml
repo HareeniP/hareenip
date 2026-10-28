@@ -1,0 +1,487 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: books
+    description: Public bookstore catalog
+  - name: admin
+    description: Authenticated owner book management
+  - name: checkout
+    description: Razorpay Test Mode checkout and explicitly enabled Live Mode ebook delivery
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /checkout/orders:
+    post:
+      operationId: createCheckoutOrder
+      tags: [checkout]
+      summary: Create a Razorpay order for a book that is ready for secure delivery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutOrderInput"
+      responses:
+        "201":
+          description: Razorpay order ready for Checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutOrder"
+        "502":
+          description: Razorpay could not create the order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The configured Razorpay mode or credentials are invalid or unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: The book is not published or is not available for secure delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /books:
+    get:
+      operationId: listBooks
+      tags: [books]
+      summary: List published books available in the public catalog
+      responses:
+        "200":
+          description: Published catalog entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Book"
+  /books/{slug}:
+    get:
+      operationId: getBook
+      tags: [books]
+      summary: Get a published book by its URL slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Book details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          description: Book not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/books:
+    get:
+      operationId: listAdminBooks
+      tags: [admin]
+      summary: List books for the authenticated owner
+      responses:
+        "200":
+          description: Owner's book catalog, including drafts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminBook"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Account is not on the owner allowlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The owner email has not been configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createAdminBook
+      tags: [admin]
+      summary: Create a book as a draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookInput"
+      responses:
+        "201":
+          description: Draft book created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBook"
+        "400":
+          description: Book fields are invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Account is not on the owner allowlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The owner email has not been configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/books/{id}:
+    patch:
+      operationId: updateAdminBook
+      tags: [admin]
+      summary: Edit a book or change its publication status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookUpdate"
+      responses:
+        "200":
+          description: Updated book
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBook"
+        "400":
+          description: Book fields are invalid or publication is blocked until a private PDF is available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Account is not on the owner allowlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Book not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The owner email has not been configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteAdminBook
+      tags: [admin]
+      summary: Soft-delete a book while preserving its payment history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Book removed from the catalog
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Account is not on the owner allowlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Book not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The owner email has not been configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /checkout/verify:
+    post:
+      operationId: verifyCheckoutPayment
+      tags: [checkout]
+      summary: Verify the Razorpay signature and captured payment on the server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutPaymentVerificationInput"
+      responses:
+        "200":
+          description: Captured payment verified; a download token is returned only in Live Mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutPaymentVerification"
+        "400":
+          description: Invalid payment signature or request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Razorpay order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Payment is not captured or order was already verified differently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Razorpay payment status could not be confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Credentials for the order's Razorpay mode are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /checkout/download:
+    post:
+      operationId: downloadEbook
+      tags: [checkout]
+      summary: Stream the private ebook after a verified captured Live Mode payment
+      description: Requires a short-lived server-signed token returned only after server-side verification of a captured Live Mode payment. Test Mode orders cannot download the PDF.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EbookDownloadInput"
+      responses:
+        "200":
+          description: The private PDF is streamed as an attachment
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid download token request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Token is invalid, expired, or does not refer to a verified Live Mode payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    CheckoutOrder:
+      type: object
+      properties:
+        keyId:
+          type: string
+        orderId:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        testMode:
+          type: boolean
+      required: [keyId, orderId, amount, currency, testMode]
+    CheckoutOrderInput:
+      type: object
+      properties:
+        bookId:
+          type: string
+          format: uuid
+      required: [bookId]
+    Book:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        author: { type: string }
+        shortDescription: { type: string }
+        fullDescription: { type: string }
+        priceRupees: { type: integer }
+        category: { type: string }
+        language: { type: string }
+        coverImageUrl: { type: ["string", "null"] }
+        featured: { type: boolean }
+        newArrival: { type: boolean }
+        canPurchase: { type: boolean }
+      required: [id, slug, title, author, shortDescription, fullDescription, priceRupees, category, language, coverImageUrl, featured, newArrival, canPurchase]
+    AdminBook:
+      allOf:
+        - $ref: "#/components/schemas/Book"
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [draft, published, deleted]
+            hasPrivatePdf:
+              type: boolean
+            uploadsEnabled:
+              type: boolean
+          required: [status, hasPrivatePdf, uploadsEnabled]
+    BookInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 180 }
+        author: { type: string, minLength: 1, maxLength: 180 }
+        shortDescription: { type: string, minLength: 1, maxLength: 500 }
+        fullDescription: { type: string, minLength: 1, maxLength: 12000 }
+        priceRupees: { type: integer, minimum: 1, maximum: 1000000 }
+        category: { type: string, minLength: 1, maxLength: 80 }
+        language: { type: string, minLength: 1, maxLength: 80 }
+        coverImageUrl: { type: ["string", "null"], maxLength: 2048 }
+        featured: { type: boolean }
+        newArrival: { type: boolean }
+      required: [title, author, shortDescription, fullDescription, priceRupees, category, language]
+    BookUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 180 }
+        author: { type: string, minLength: 1, maxLength: 180 }
+        shortDescription: { type: string, minLength: 1, maxLength: 500 }
+        fullDescription: { type: string, minLength: 1, maxLength: 12000 }
+        priceRupees: { type: integer, minimum: 1, maximum: 1000000 }
+        category: { type: string, minLength: 1, maxLength: 80 }
+        language: { type: string, minLength: 1, maxLength: 80 }
+        coverImageUrl: { type: ["string", "null"], maxLength: 2048 }
+        featured: { type: boolean }
+        newArrival: { type: boolean }
+        status:
+          type: string
+          enum: [draft, published]
+    CheckoutPaymentVerificationInput:
+      type: object
+      properties:
+        orderId:
+          type: string
+          minLength: 1
+        paymentId:
+          type: string
+          minLength: 1
+        signature:
+          type: string
+          pattern: "^[a-fA-F0-9]{64}$"
+      required: [orderId, paymentId, signature]
+    CheckoutPaymentVerification:
+      type: object
+      properties:
+        verified:
+          type: boolean
+        testMode:
+          type: boolean
+        message:
+          type: string
+        downloadToken:
+          type: string
+          description: Short-lived signed download authorization. Present only for a verified captured Live Mode payment.
+      required: [verified, testMode, message]
+    EbookDownloadInput:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 2048
+      required: [token]
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
